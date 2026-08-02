@@ -1,0 +1,17 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run intraday entry script",
+      "type": "shell",
+      "command": "/home/gerrit/.pyenv/versions/miniconda3-latest/bin/python",
+      "args": [
+        "${workspaceFolder}/model-pipeline/src/yfinance_intraday_entry.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/model-pipeline/src"
+      },
+      "problemMatcher": []
+    }
+  ]
+}
