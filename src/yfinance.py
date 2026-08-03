@@ -65,40 +65,60 @@ ALL_TICKERS = [
     "INDO",
 ]
 
-INTRADAY_INTERVALS = ["1m", "4m"]
+INTRADAY_INTERVALS = ["1m", "5m"]
+INTRADAY_PERIOD = "7d"
+INTRADAY_HISTORY_DAYS = 7
 DAILY_INTERVAL = "1d"
-UPDATE_PERIOD = "7d"
+DAILY_UPDATE_DAYS = 7
+DAILY_FALLBACK_PERIOD = "max"
 
 
 def _safe_filename(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.=-]", "_", text)
 
 
-def _cache_filename(
+def _intraday_filename(ticker: str, interval: str) -> str:
+    safe_ticker = _safe_filename(ticker)
+    return f"intraday_{safe_ticker}_{interval}_history.csv"
+
+
+def _daily_filename(ticker: str) -> str:
+    safe_ticker = _safe_filename(ticker)
+    return f"daily_{safe_ticker}.csv"
+
+
+def _intraday_path(ticker: str, interval: str) -> Path:
+    return DATA_DIR / _intraday_filename(ticker, interval)
+
+
+def _daily_path(ticker: str) -> Path:
+    return DATA_DIR / _daily_filename(ticker)
+
+
+def _download_price_data(
     ticker: str,
     interval: str,
-    period: str,
-    prefix: str = "",
-    date_prefix: str | None = None,
-) -> str:
-    if date_prefix is None:
-        date_prefix = dt.date.today().strftime("%m%d")
-    safe_ticker = _safe_filename(ticker)
-    name = f"{safe_ticker}_{interval}_{period}"
-    if prefix:
-        name = f"{prefix}_{name}"
-    return f"{date_prefix}_{name}.csv"
+    period: str | None = None,
+    start: dt.date | None = None,
+    end: dt.date | None = None,
+) -> pd.DataFrame:
+    download_args = {"interval": interval, "progress": False}
+    if start is not None or end is not None:
+        if period is not None:
+            raise ValueError("Use either period or start/end, not both")
+        if start is not None:
+            download_args["start"] = start.isoformat()
+        if end is not None:
+            download_args["end"] = end.isoformat()
+    elif period is not None:
+        download_args["period"] = period
+    else:
+        raise ValueError("Either period or start/end must be supplied")
 
-
-def _cache_path(ticker: str, interval: str, period: str, prefix: str = "") -> Path:
-    return DATA_DIR / _cache_filename(ticker, interval, period, prefix=prefix)
-
-
-def _download_price_data(ticker: str, interval: str, period: str) -> pd.DataFrame:
-    df = yf.download(ticker, interval=interval, period=period, progress=False)
+    df = yf.download(ticker, **download_args)
     if df.empty:
         raise ValueError(
-            f"No data returned for {ticker} with interval={interval} period={period}"
+            f"No data returned for {ticker} with interval={interval} period={period} start={start} end={end}"
         )
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = [col[0] for col in df.columns]
@@ -109,6 +129,7 @@ def _download_price_data(ticker: str, interval: str, period: str) -> pd.DataFram
 
 
 def _save_dataframe(df: pd.DataFrame, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     try:
         df.to_csv(path)
     except OSError as exc:
@@ -116,23 +137,35 @@ def _save_dataframe(df: pd.DataFrame, path: Path) -> None:
 
 
 def get_intraday_data(
-    ticker: str, interval: str, period: str = UPDATE_PERIOD
+    ticker: str,
+    interval: str,
+    period: str = INTRADAY_PERIOD,
+    start: dt.date | None = None,
+    end: dt.date | None = None,
 ) -> pd.DataFrame:
-    cache_file = _cache_path(ticker, interval, period, prefix="intraday")
-    df = _download_price_data(ticker, interval=interval, period=period)
+    cache_file = _intraday_path(ticker, interval)
+    df = _download_price_data(
+        ticker, interval=interval, period=period, start=start, end=end
+    )
     _save_dataframe(df, cache_file)
     return df
 
 
 def get_daily_data(
-    ticker: str, period: str = UPDATE_PERIOD, interval: str = DAILY_INTERVAL
+    ticker: str,
+    start: dt.date | None = None,
+    end: dt.date | None = None,
+    period: str | None = None,
+    interval: str = DAILY_INTERVAL,
 ) -> pd.DataFrame:
-    df = _download_price_data(ticker, interval=interval, period=period)
+    df = _download_price_data(
+        ticker, interval=interval, period=period, start=start, end=end
+    )
     return df
 
 
 def append_daily_data(ticker: str, df: pd.DataFrame) -> Path:
-    cache_file = _cache_path(ticker, DAILY_INTERVAL, UPDATE_PERIOD, prefix="daily")
+    cache_file = _daily_path(ticker)
     if cache_file.exists():
         existing = pd.read_csv(cache_file, index_col=0, parse_dates=True)
         combined = pd.concat([existing, df])
@@ -143,23 +176,69 @@ def append_daily_data(ticker: str, df: pd.DataFrame) -> Path:
     return cache_file
 
 
+def append_intraday_data(ticker: str, interval: str, df: pd.DataFrame) -> Path:
+    cache_file = _intraday_path(ticker, interval)
+    if cache_file.exists():
+        existing = pd.read_csv(cache_file, index_col=0, parse_dates=True)
+        combined = pd.concat([existing, df])
+        combined = combined[~combined.index.duplicated(keep="last")].sort_index()
+    else:
+        combined = df
+    _save_dataframe(combined, cache_file)
+    return cache_file
+
+
+def update_daily_file(ticker: str) -> None:
+    daily_file = _daily_path(ticker)
+    if daily_file.exists():
+        existing = pd.read_csv(daily_file, index_col=0, parse_dates=True)
+        last_date = existing.index.max().date()
+        if last_date >= dt.date.today():
+            print("  daily: up to date")
+            return
+        start = last_date - dt.timedelta(days=1)
+        end = dt.date.today() + dt.timedelta(days=1)
+        new_df = get_daily_data(ticker, start=start, end=end)
+    else:
+        new_df = get_daily_data(ticker, period=DAILY_FALLBACK_PERIOD)
+
+    if new_df.empty:
+        print(f"  daily: no new data for {ticker}")
+        return
+
+    cache_path = append_daily_data(ticker, new_df)
+    print(f"  daily: rows={len(new_df)}, saved={cache_path.name}")
+
+
+def _intraday_start_end(ticker: str, interval: str) -> tuple[dt.date, dt.date]:
+    cache_file = _intraday_path(ticker, interval)
+    if cache_file.exists():
+        existing = pd.read_csv(cache_file, index_col=0, parse_dates=True)
+        last_ts = existing.index.max()
+        start = last_ts.date() - dt.timedelta(days=1)
+    else:
+        start = dt.date.today() - dt.timedelta(days=INTRADAY_HISTORY_DAYS)
+    end = dt.date.today() + dt.timedelta(days=1)
+    return start, end
+
+
 def update_ticker_data(ticker: str) -> None:
     print(f"Updating {ticker}")
     for interval in INTRADAY_INTERVALS:
         try:
+            start, end = _intraday_start_end(ticker, interval)
             df_intraday = get_intraday_data(
-                ticker, interval=interval, period=UPDATE_PERIOD
+                ticker, interval=interval, period=None, start=start, end=end
             )
-            print(f"  {interval} {UPDATE_PERIOD}: rows={len(df_intraday)}")
+            cache_path = append_intraday_data(ticker, interval, df_intraday)
+            print(f"  {interval}: rows={len(df_intraday)}, saved={cache_path.name}")
         except Exception as exc:
-            print(f"  {interval} {UPDATE_PERIOD}: ERROR {exc}")
+            print(f"  {interval}: ERROR {exc}")
 
     try:
-        daily_df = get_daily_data(ticker, period=UPDATE_PERIOD, interval=DAILY_INTERVAL)
-        cache_path = append_daily_data(ticker, daily_df)
-        print(f"  daily {UPDATE_PERIOD}: rows={len(daily_df)}, saved={cache_path.name}")
+        update_daily_file(ticker)
     except Exception as exc:
-        print(f"  daily {UPDATE_PERIOD}: ERROR {exc}")
+        print(f"  daily: ERROR {exc}")
 
 
 def update_all_tickers() -> None:
