@@ -1,7 +1,43 @@
 import datetime as dt
+import re
 import numpy as np
 import pandas as pd
 import yfinance as yf
+from pathlib import Path
+import os
+
+# Directory to store cached/downloaded data (can be overridden with DATA_DIR env var)
+DATA_DIR = Path(os.getenv("DATA_DIR", "data"))
+if not DATA_DIR.is_absolute():
+    DATA_DIR = Path(__file__).resolve().parent.parent / DATA_DIR
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _safe_filename(text: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.=-]", "_", text)
+
+
+def _cache_filename(
+    ticker: str,
+    interval: str,
+    period: str,
+    prefix: str = "",
+    date_prefix: str | None = None,
+) -> str:
+    """Build a cache filename like MMDD_intraday_TICKER_5m_60d.csv."""
+    if date_prefix is None:
+        date_prefix = dt.date.today().strftime("%m%d")
+    safe_ticker = _safe_filename(ticker)
+    name = f"{safe_ticker}_{interval}_{period}"
+    if prefix:
+        name = f"{prefix}_{name}"
+    return f"{date_prefix}_{name}.csv"
+
+
+def _cache_path(ticker: str, interval: str, period: str, prefix: str = "") -> Path:
+    return DATA_DIR / _cache_filename(ticker, interval, period, prefix=prefix)
+
+
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -12,6 +48,11 @@ def get_intraday_data(
     ticker: str, interval: str = "5m", period: str = "30d"
 ) -> pd.DataFrame:
     """Fetch intraday OHLCV data from yfinance for a symbol."""
+    cache_file = _cache_path(ticker, interval, period, prefix="intraday")
+    if cache_file.exists():
+        df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
+        return df
+
     df = yf.download(ticker, interval=interval, period=period, progress=False)
     if df.empty:
         raise ValueError(
@@ -22,6 +63,12 @@ def get_intraday_data(
     df = df.rename_axis("datetime").reset_index()
     df["datetime"] = pd.to_datetime(df["datetime"])
     df = df.set_index("datetime")
+
+    try:
+        df.to_csv(cache_file)
+    except OSError as exc:
+        print(f"Warning: failed to write cache file {cache_file}: {exc}")
+
     return df
 
 
@@ -29,6 +76,11 @@ def get_daily_data(
     ticker: str = "SPY", period: str = "5y", interval: str = "1d"
 ) -> pd.DataFrame:
     """Fetch daily OHLCV data from yfinance for a symbol over the past 5 years."""
+    cache_file = _cache_path(ticker, interval, period, prefix="daily")
+    if cache_file.exists():
+        df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
+        return df
+
     df = yf.download(ticker, interval=interval, period=period, progress=False)
     if df.empty:
         raise ValueError(
@@ -39,6 +91,12 @@ def get_daily_data(
     df = df.rename_axis("datetime").reset_index()
     df["datetime"] = pd.to_datetime(df["datetime"])
     df = df.set_index("datetime")
+
+    try:
+        df.to_csv(cache_file)
+    except OSError as exc:
+        print(f"Warning: failed to write cache file {cache_file}: {exc}")
+
     return df
 
 
