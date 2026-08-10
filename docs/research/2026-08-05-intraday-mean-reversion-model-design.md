@@ -52,9 +52,10 @@ This model's pipeline structure — features → probability/expected-return out
 
 ## Implementation status (updated 2026-08-10)
 
-`src/mean_reversion.py` implements the feature set (`build_features()`) and a first label definition (`make_labels()`, z-score-shrink reversion target + raw forward return). Verified clean (no NaNs) against both SPY (1m, single-session) and ES=F (5m, near-24h). Two simplifications worth flagging:
+`src/mean_reversion.ipynb` implements the feature set (`build_features()`) and a first label definition (`make_labels()`, z-score-shrink reversion target + raw forward return), plus matplotlib/seaborn visualization of the features and label/forward-return distributions. Verified clean (no NaNs) against both SPY (1m, single-session) and ES=F (5m, near-24h). Converted from an initial `.py` module to a notebook (2026-08-10) so features/windows/labels can be iterated on interactively — the module version is no longer in the repo.
 
 - **Session grouping is calendar-date**, correct for single-session ETFs but a placeholder for futures until real session boundaries (Asia/Europe/US) are decided (see brief's "Market lineup / session schedule" open item). VWAP and time-since-open/to-close currently reset on calendar-date boundaries, not true session boundaries.
 - **Rolling-window features are NOT session-scoped** (global `.rolling()` on the full series) — near session/day boundaries this can leak a few bars of the prior day into a window. Acceptable for now, revisit once session boundaries are formalized.
+- **Plots break the line at data gaps >20min** (overnight, weekends, CME's daily maintenance break) rather than interpolating across them — an initial version silently drew a fake flat line from Friday's close straight to Monday's open before this was caught by inspecting the rendered chart.
 
 **Not yet built**: model training, walk-forward validation, and the Sharpe/Sortino/Calmar evaluation — still blocked on trade mechanics (entry/exit thresholds, position sizing) and cost/roll methodology, both still open per the brief.
