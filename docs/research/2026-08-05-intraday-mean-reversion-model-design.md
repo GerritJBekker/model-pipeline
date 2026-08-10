@@ -49,3 +49,12 @@ Model returns a **probability (or expected forward return)**, not a hard buy/sel
 ## Framework reuse (decision 2026-08-05)
 
 This model's pipeline structure — features → probability/expected-return output → separate entry/exit rule layer → walk-forward validation → Sharpe/Sortino/Calmar evaluation — is the template for subsequent strategies (trend/momentum, stat arb/pairs), not a one-off. Future strategy notes should describe what changes (features, label definition, session scope) relative to this framework rather than re-deriving it from scratch.
+
+## Implementation status (updated 2026-08-10)
+
+`src/mean_reversion.py` implements the feature set (`build_features()`) and a first label definition (`make_labels()`, z-score-shrink reversion target + raw forward return). Verified clean (no NaNs) against both SPY (1m, single-session) and ES=F (5m, near-24h). Two simplifications worth flagging:
+
+- **Session grouping is calendar-date**, correct for single-session ETFs but a placeholder for futures until real session boundaries (Asia/Europe/US) are decided (see brief's "Market lineup / session schedule" open item). VWAP and time-since-open/to-close currently reset on calendar-date boundaries, not true session boundaries.
+- **Rolling-window features are NOT session-scoped** (global `.rolling()` on the full series) — near session/day boundaries this can leak a few bars of the prior day into a window. Acceptable for now, revisit once session boundaries are formalized.
+
+**Not yet built**: model training, walk-forward validation, and the Sharpe/Sortino/Calmar evaluation — still blocked on trade mechanics (entry/exit thresholds, position sizing) and cost/roll methodology, both still open per the brief.
