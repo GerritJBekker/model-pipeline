@@ -143,11 +143,9 @@ def get_intraday_data(
     start: dt.date | None = None,
     end: dt.date | None = None,
 ) -> pd.DataFrame:
-    cache_file = _intraday_path(ticker, interval)
     df = _download_price_data(
         ticker, interval=interval, period=period, start=start, end=end
     )
-    _save_dataframe(df, cache_file)
     return df
 
 
@@ -212,12 +210,13 @@ def update_daily_file(ticker: str) -> None:
 
 def _intraday_start_end(ticker: str, interval: str) -> tuple[dt.date, dt.date]:
     cache_file = _intraday_path(ticker, interval)
+    earliest_allowed = dt.date.today() - dt.timedelta(days=INTRADAY_HISTORY_DAYS)
     if cache_file.exists():
         existing = pd.read_csv(cache_file, index_col=0, parse_dates=True)
         last_ts = existing.index.max()
-        start = last_ts.date() - dt.timedelta(days=1)
+        start = max(last_ts.date() - dt.timedelta(days=1), earliest_allowed)
     else:
-        start = dt.date.today() - dt.timedelta(days=INTRADAY_HISTORY_DAYS)
+        start = earliest_allowed
     end = dt.date.today() + dt.timedelta(days=1)
     return start, end
 
