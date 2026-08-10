@@ -67,7 +67,8 @@ ALL_TICKERS = [
 
 INTRADAY_INTERVALS = ["1m", "5m"]
 INTRADAY_PERIOD = "7d"
-INTRADAY_HISTORY_DAYS = 7
+# Yahoo's actual retention window differs per interval: ~7-8 days for 1m, ~60 days for 5m.
+INTRADAY_HISTORY_DAYS = {"1m": 7, "5m": 60}
 DAILY_INTERVAL = "1d"
 DAILY_UPDATE_DAYS = 7
 DAILY_FALLBACK_PERIOD = "max"
@@ -210,7 +211,7 @@ def update_daily_file(ticker: str) -> None:
 
 def _intraday_start_end(ticker: str, interval: str) -> tuple[dt.date, dt.date]:
     cache_file = _intraday_path(ticker, interval)
-    earliest_allowed = dt.date.today() - dt.timedelta(days=INTRADAY_HISTORY_DAYS)
+    earliest_allowed = dt.date.today() - dt.timedelta(days=INTRADAY_HISTORY_DAYS[interval])
     if cache_file.exists():
         existing = pd.read_csv(cache_file, index_col=0, parse_dates=True)
         last_ts = existing.index.max()
