@@ -15,3 +15,7 @@ Before making architecture or strategy decisions, check `docs/research/` (indexe
 This repo is worked on from two machines: **Laptop** (`/home/gerrit/PROJECTS/model-pipeline`) and **Desktop** (SSH alias `desktop`, reachable via `ssh gerrit@desktop`). Claude Code can also run natively on Desktop as its own session.
 
 At the start of a session, if it's not already clear which machine you're on, run `hostname` before taking actions that depend on machine identity (paths, running processes, uncommitted changes) — don't assume Laptop by default. See the `machine-topology` memory for fuller context.
+
+## Claude Code memory
+
+Claude Code's persistent per-project memory for this repo is shared between Laptop and Desktop: `/home/gerrit/.claude/projects/-home-gerrit-PROJECTS-model-pipeline/memory` is a symlink into the synced folder `/home/gerrit/Sync/claude-memory/model-pipeline/` (synced via Syncthing, not git). See `docs/research/2026-08-05-claude-memory-sync.md` for the setup. Memory holds environment/user/feedback context that shouldn't be re-derived each session; non-trivial architecture/strategy decisions still belong in `docs/research/` per the Research log section above, not only in memory.
