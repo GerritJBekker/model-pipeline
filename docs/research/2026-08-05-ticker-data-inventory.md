@@ -72,7 +72,13 @@ Comparing earliest timestamps between the `0803_*` dated snapshots and the curre
 
 **Backfill**: the fix alone doesn't recover already-lost history — since a cache file already exists for every ticker, `_intraday_start_end()` takes the "cache exists" branch and only ever fetches forward from the last cached timestamp, never revisiting the older window. Instead, ran a one-off local merge of all `0803_*` snapshot files into the rolling cache via the existing `append_daily_data`/`append_intraday_data` functions (same dedupe/sort logic already in use, so no new code path). Verified afterward across all 33 tickers: rolling-cache earliest timestamp now matches or precedes the 0803 snapshot's earliest for both 1m and 5m, no duplicate index entries, indices monotonic.
 
-**Resolves the "prune 0803 snapshots" open question below**: the `0803_*` files are now fully redundant — everything they held is merged into the rolling cache. Not yet deleted as of this writing.
+**Resolves the "prune 0803 snapshots" open question below**: the `0803_*` files are now fully redundant — everything they held is merged into the rolling cache. Deleted (all 99 files) later the same day.
+
+## Per-ticker date-range log (added 2026-08-10)
+
+`update_all_tickers()` now ends each run by calling `write_ticker_dates_log()` (`src/yfinance.py`), which writes `/home/gerrit/Sync/logs/yfinance-dates.log` — a plain-text table of min/max cached timestamp per ticker × dataset (daily, intraday_1m, intraday_5m; 99 rows for the 33-ticker universe). Purpose: a quick sanity check of data freshness/coverage without opening every CSV (e.g. confirms ETF daily bars lag futures by a day since their cash session hasn't closed yet, or would flag a ticker silently falling behind).
+
+Before overwriting, the previous log is copied to `yfinance-dates.bak` (one generation of history, not a full timestamped archive) — for audit purposes, so the log from the prior run isn't just clobbered silently.
 
 ## Open questions
 
