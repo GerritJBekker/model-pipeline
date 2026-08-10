@@ -12,3 +12,7 @@ This repo is worked on from two machines: **Laptop** (`/home/gerrit/PROJECTS/mod
 Reaching Desktop from Laptop: `ssh gerrit@desktop 'cd ~/PROJECTS/model-pipeline && <command>'`. Check `git status` there first every time before pulling or discarding changes.
 
 See `2026-08-05-claude-memory-sync.md` for how memory stays consistent across the two.
+
+## Environment drift between machines (2026-08-10)
+
+Laptop and Desktop have different conda layouts for the same `ml_env` environment — Laptop: `/home/gerrit/.pyenv/versions/miniconda3-latest/envs/ml_env`; Desktop: `/home/gerrit/anaconda3/envs/ml_env`. A commit made from Desktop once hardcoded Desktop's path into the repo-tracked `.vscode/settings.json`, which broke VS Code's Python interpreter on Laptop after pulling. When touching `.vscode/settings.json` or any absolute conda/python path, verify it's correct for the current machine (`hostname` first) before committing.
