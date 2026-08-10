@@ -2,6 +2,7 @@ import datetime as dt
 import importlib
 import os
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -28,6 +29,9 @@ DATA_DIR = Path(os.getenv("DATA_DIR", "/home/gerrit/Sync"))
 if not DATA_DIR.is_absolute():
     DATA_DIR = Path(__file__).resolve().parent.parent / DATA_DIR
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+LOGS_DIR = DATA_DIR / "logs"
+TICKER_DATES_LOG_PATH = LOGS_DIR / "yfinance-dates.log"
 
 ALL_TICKERS = [
     "6B=F",
@@ -241,9 +245,40 @@ def update_ticker_data(ticker: str) -> None:
         print(f"  daily: ERROR {exc}")
 
 
+def _dataset_min_max(path: Path) -> tuple[str, str]:
+    if not path.exists():
+        return "MISSING", "MISSING"
+    df = pd.read_csv(path, index_col=0, parse_dates=True)
+    return str(df.index.min()), str(df.index.max())
+
+
+def write_ticker_dates_log() -> Path:
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    if TICKER_DATES_LOG_PATH.exists():
+        backup_path = TICKER_DATES_LOG_PATH.with_suffix(".log.bak")
+        shutil.copy2(TICKER_DATES_LOG_PATH, backup_path)
+
+    header = f"{'ticker':<8} {'dataset':<12} {'min_date':<26} {'max_date':<26}"
+    lines = [header, "-" * len(header)]
+    for ticker in ALL_TICKERS:
+        datasets = [
+            ("daily", _daily_path(ticker)),
+            ("intraday_1m", _intraday_path(ticker, "1m")),
+            ("intraday_5m", _intraday_path(ticker, "5m")),
+        ]
+        for label, path in datasets:
+            min_date, max_date = _dataset_min_max(path)
+            lines.append(f"{ticker:<8} {label:<12} {min_date:<26} {max_date:<26}")
+
+    TICKER_DATES_LOG_PATH.write_text("\n".join(lines) + "\n")
+    return TICKER_DATES_LOG_PATH
+
+
 def update_all_tickers() -> None:
     for ticker in ALL_TICKERS:
         update_ticker_data(ticker)
+    log_path = write_ticker_dates_log()
+    print(f"Wrote {log_path}")
 
 
 def main() -> None:
