@@ -59,3 +59,9 @@ This model's pipeline structure — features → probability/expected-return out
 - **Plots break the line at data gaps >20min** (overnight, weekends, CME's daily maintenance break) rather than interpolating across them — an initial version silently drew a fake flat line from Friday's close straight to Monday's open before this was caught by inspecting the rendered chart.
 
 **Not yet built**: model training, walk-forward validation, and the Sharpe/Sortino/Calmar evaluation — still blocked on trade mechanics (entry/exit thresholds, position sizing) and cost/roll methodology, both still open per the brief.
+
+## Feature screening (added 2026-08-10)
+
+Extended `build_features()` with 8 more candidates: `atr_pct` (true-range vol), `return_autocorr` (rolling lag-1 return autocorrelation, a trending-vs-range-bound regime feature), `bb_width` (Bollinger band width, volatility regime distinct from `zscore`'s price-position), `time_sin`/`time_cos` (cyclical time-of-day), and `dist_from_open`/`dist_from_high`/`dist_from_low` (session-relative price levels).
+
+Added a univariate AUC-vs-label screen (`src/mean_reversion.ipynb`, scored via `abs()` for symmetric features) to check empirically which features carry signal before investing in a real model. Results (SPY / ES=F): `zscore` ~0.83-0.84, `momentum` ~0.65, `bb_width` ~0.58-0.60, `rel_volume` ~0.56-0.58, everything else ≤0.53 (near-random). **`zscore`'s dominance is largely mechanical** — the label is defined as "did `|zscore|` shrink," so a feature built from the same quantity the label is derived from is partly circular, not necessarily real edge. `momentum` is the more informative result since it's independent of the label's construction. None of the 8 new candidates showed meaningful univariate signal against this label — kept in the feature set for now (cheap to compute, may matter more once trade mechanics/labels are refined) but not something to lean on as-is.
