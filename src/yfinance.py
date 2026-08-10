@@ -255,7 +255,7 @@ def _dataset_min_max(path: Path) -> tuple[str, str]:
 def write_ticker_dates_log() -> Path:
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     if TICKER_DATES_LOG_PATH.exists():
-        backup_path = TICKER_DATES_LOG_PATH.with_suffix(".log.bak")
+        backup_path = TICKER_DATES_LOG_PATH.with_suffix(".bak")
         shutil.copy2(TICKER_DATES_LOG_PATH, backup_path)
 
     header = f"{'ticker':<8} {'dataset':<12} {'min_date':<26} {'max_date':<26}"
