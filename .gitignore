@@ -1,2 +1,8 @@
 __pycache__/
 .venv/
+
+# QuantConnect Local Platform workspace: lean.json has blank
+# broker/live-trading credential fields that get filled in later
+# (ib-password, oanda-access-token, etc.), and .QuantConnect/cache
+# holds API session data. Never commit either.
+lean/
