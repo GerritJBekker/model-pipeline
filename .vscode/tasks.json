@@ -4,12 +4,12 @@
     {
       "label": "Run intraday entry script",
       "type": "shell",
-      "command": "/home/gerrit/.pyenv/versions/miniconda3-latest/bin/python",
+      "command": "${command:python.interpreterPath}",
       "args": [
-        "${workspaceFolder}/model-pipeline/src/yfinance_intraday_entry.py"
+        "${workspaceFolder}/src/yfinance_intraday_entry.py"
       ],
       "options": {
-        "cwd": "${workspaceFolder}/model-pipeline/src"
+        "cwd": "${workspaceFolder}/src"
       },
       "problemMatcher": []
     }
